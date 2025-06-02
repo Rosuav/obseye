@@ -1,0 +1,4 @@
+eyeGestures
+mediapipe
+scikit-learn
+websockets

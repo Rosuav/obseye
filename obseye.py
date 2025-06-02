@@ -8,13 +8,7 @@ import traceback
 import websockets
 import cv2
 import numpy
-
-if not os.path.exists("../GazeTracking"):
-	print("Need https://github.com/antoinelame/GazeTracking or equivalent", file=sys.stderr)
-	sys.exit(1)
-
-sys.path.append("../GazeTracking")
-from gaze_tracking import GazeTracking
+from eyeGestures import EyeGestures_v3
 
 config = {
 	"server": "localhost",
@@ -28,7 +22,7 @@ try:
 except FileNotFoundError:
 	pass
 
-gaze = GazeTracking()
+gestures = EyeGestures_v3()
 
 def handle_errors(task):
 	try:
@@ -59,7 +53,7 @@ async def request_frames(conn):
 			"imageFormat": "png",
 		}}}
 		await conn.send(json.dumps(request))
-		await asyncio.sleep(0.5)
+		await asyncio.sleep(1/2)
 
 async def main():
 	async with websockets.connect("ws://%s:%d/" % (config["server"], config["port"])) as conn:
@@ -79,14 +73,17 @@ async def main():
 					uri = msg["d"]["responseData"]["imageData"]
 					png = base64.b64decode(uri.removeprefix("data:image/png;base64,"))
 					img = cv2.imdecode(numpy.frombuffer(png, dtype=numpy.uint8), cv2.IMREAD_ANYCOLOR)
-					gaze.refresh(img)
 					# Don't do this normally. Waiting 100ms in an event loop, not a good idea.
 					# I have no idea if imshow can be made to play nicely with asyncio but let's not bother.
-					# cv2.imshow("preview", img)
-					cv2.imshow("preview", gaze.annotated_frame())
-					h, v = gaze.horizontal_ratio(), gaze.vertical_ratio()
-					if h is not None and v is not None: print("%3dx%d" % (h * 100, v * 100))
-					else: print("-- no eyes --")
-					if cv2.waitKey(100) == ord("q"): break
+					# key_points, blink, subframe = gestures.getLandmarks(img)
+					cv2.imshow("preview", img)
+					# cv2.imshow("preview", subframe)
+					event, cevent = gestures.step(img, True, 1920, 1080)
+					# print(event, cevent)
+					if event:
+						cursor_x, cursor_y = event.point[0], event.point[1]
+						fixation = event.fixation
+						print(cursor_x, cursor_y, fixation)
+					if cv2.waitKey(10) == ord("q"): break
 
 asyncio.run(main())
